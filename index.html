@@ -392,6 +392,15 @@ const RAW = {"g2g": [{"date": "2026-04-20", "country": "Indonesia", "ad_type": "
 const FLAGS = {"Indonesia": "🇮🇩", "Malaysia": "🇲🇾", "Thailand": "🇹🇭", "Philippines": "🇵🇭", "Taiwan": "🇹🇼", "Singapore": "🇸🇬", "Vietnam": "🇻🇳", "Hong Kong": "🇭🇰", "United States": "🇺🇸", "Spain": "🇪🇸", "Mexico": "🇲🇽", "Unknown": "❓"};
 const METRIC_DEFS = {"spend": {"label": "花费", "formula": "SUM(spend)", "desc": "广告投入总额（USD）", "better": -1}, "imp": {"label": "曝光", "formula": "SUM(impressions)", "desc": "广告被展示次数", "better": 1}, "vv": {"label": "视频观看", "formula": "SUM(video_play_actions)", "desc": "视频被播放次数（≥1秒）", "better": 1}, "ctr": {"label": "CTR链接", "formula": "link_clicks / impressions", "desc": "链接点击率，衡量创意吸引力", "better": 1}, "atc": {"label": "加购", "formula": "SUM(omni_add_to_cart)", "desc": "加入购物车次数", "better": 1}, "pur": {"label": "购买", "formula": "SUM(purchase)", "desc": "完成订单次数", "better": 1}, "gmv": {"label": "销售额", "formula": "SUM(purchase_value)", "desc": "GMV（USD）", "better": 1}, "cpm": {"label": "CPM", "formula": "spend / impressions × 1000", "desc": "千次曝光成本", "better": -1}, "cvr": {"label": "CVR", "formula": "purchases / link_clicks", "desc": "链接点击到购买转化率", "better": 1}, "roas": {"label": "ROAS", "formula": "purchase_value / spend", "desc": "投入产出比", "better": 1}, "cpa": {"label": "CPA", "formula": "spend / purchases", "desc": "单次购买成本", "better": -1}, "i_p": {"label": "曝光/购买", "formula": "impressions / purchases", "desc": "产生1次购买平均需要多少次曝光", "better": -1}};
 const BRAND_LABELS = {"g2g": "Glad2Glow", "skt": "Skintific", "tp": "TimePrime", "bb": "Bodibreze", "fr": "Facerinna", "np": "NextPrime", "lmx": "Lumixpert"};
+const BRAND_COLORS = {
+  g2g: {bg:'#fff0f4', bdr:'#ffd6e4', hdr:'#ffe4ec'},
+  skt: {bg:'#eff6ff', bdr:'#bfdbfe', hdr:'#dbeafe'},
+  tp:  {bg:'#f7f8f9', bdr:'#dee2e6', hdr:'#e9ecef'},
+  np:  {bg:'#f4f4f5', bdr:'#d4d4d8', hdr:'#e4e4e7'},
+  fr:  {bg:'#f0f4ff', bdr:'#c7d2fe', hdr:'#e0e7ff'},
+  lmx: {bg:'#f0fdf4', bdr:'#bbf7d0', hdr:'#dcfce7'},
+  bb:  {bg:'#fff5f5', bdr:'#fed7d7', hdr:'#fee2e2'},
+};
 const BRANDS = ["g2g", "skt", "tp", "bb", "fr", "np", "lmx"];
 const COUNTRY_ORDER = ['Indonesia','Malaysia','Thailand','Philippines','Taiwan','Singapore','Vietnam','Hong Kong','United States','Spain','Mexico'];
 const AD_ORDER = ['种草','收割'];
