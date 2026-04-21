@@ -122,6 +122,9 @@ input[type=date]:focus{border-color:var(--tx)}
 .kpi-card{background:var(--bg);border:1px solid var(--bdr);border-radius:var(--r);
   padding:15px 16px;transition:border-color .12s}
 .kpi-card:hover{border-color:var(--bdr2)}
+.kpi-hl{background:#f8f4ff;border-color:#ddd6fe}
+.kpi-hl:hover{border-color:#c4b5fd}
+.kpi-hl .kpi-val{color:var(--pur)}
 .kpi-lbl{font-size:11px;color:var(--tx3);font-weight:500;text-transform:uppercase;
   letter-spacing:.04em;margin-bottom:7px;display:inline-flex;align-items:center;gap:4px}
 .kpi-val{font-family:var(--mono);font-size:21px;font-weight:600;line-height:1.1}
@@ -312,7 +315,8 @@ const TODAY = '2026-04-21';
 const D90 = '2026-01-21';
 
 // Toggleable metric keys
-const M_KEYS = ['spend','imp','vv','ctr','atc','pur','gmv','cpm','cvr','roas','cpa','i_p'];
+const M_KEYS = ['spend','roas','cpm','imp','vv','ctr','atc','pur','gmv','cvr','cpa','i_p'];
+const M_HIGHLIGHT = new Set(['spend','roas','cpm']);
 
 // ── state ────────────────────────────────────────────────────
 const S = {
@@ -429,7 +433,7 @@ function renderKpi(rows, vsRows, elId) {
           <input type="checkbox" ${S.cmp_m.has(k)?'checked':''} onchange="toggleCmpMetric('${k}',this.checked)">
          </label>`
       : '';
-    return `<div class="kpi-card">
+    return `<div class="kpi-card${M_HIGHLIGHT.has(k)?' kpi-hl':''}">
       <p class="kpi-lbl">${md.label} <span class="hd" data-m="${k}">?</span>${cmpChk}</p>
       <p class="kpi-val">${fmtMVal(v,k)}</p>
       ${cmpHtml}
