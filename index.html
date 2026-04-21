@@ -635,12 +635,19 @@ function onDateChange() {
   if(S.vs_on&&S.vs_mode==='prev') updateVsPrev();
   render();
 }
+const CMP_DEFAULTS = ['spend','roas','cpm'];
 function toggleCmp() {
   S.vs_on=document.getElementById('cmp-on').checked;
   const cd=document.getElementById('cmp-dates');
   const ol=document.getElementById('cmp-off-label');
-  if(S.vs_on){cd.classList.remove('hidden');ol.style.display='none';if(S.vs_mode==='prev')updateVsPrev();}
-  else{cd.classList.add('hidden');ol.style.display='';}
+  if(S.vs_on){
+    cd.classList.remove('hidden');ol.style.display='none';
+    if(S.vs_mode==='prev')updateVsPrev();
+    // 首次开启时默认勾选 花费/ROAS/CPM
+    if(S.cmp_m.size===0) CMP_DEFAULTS.forEach(k=>S.cmp_m.add(k));
+  } else{
+    cd.classList.add('hidden');ol.style.display='';
+  }
   render();
 }
 function initDateInputs() {
@@ -702,6 +709,7 @@ function paramsToState() {
   if(p.has('vs_to'))S.vs_to=p.get('vs_to');
   if(p.has('vs_mode'))S.vs_mode=p.get('vs_mode');
   if(p.has('cmp_m')){S.cmp_m=new Set(p.get('cmp_m').split(','));}
+  else if(p.has('vs')&&p.get('vs')==='1'){CMP_DEFAULTS.forEach(k=>S.cmp_m.add(k));}
   if(p.has('m')){S.metrics=new Set(p.get('m').split(','));}
   if(p.has('adt')){S.adt=new Set(p.get('adt').split(','));}
   if(p.has('ct')){S.ct=new Set(p.get('ct').split(','));}
