@@ -125,6 +125,24 @@ input[type=date]:focus{border-color:var(--tx)}
 .kpi-hl{background:#f8f4ff;border-color:#ddd6fe}
 .kpi-hl:hover{border-color:#c4b5fd}
 .kpi-hl .kpi-val{color:var(--pur)}
+/* summary tab */
+.summary-section{margin-bottom:32px}
+.summary-section-title{font-size:13px;font-weight:700;color:var(--tx2);
+  letter-spacing:.02em;text-transform:uppercase;margin-bottom:14px;
+  display:flex;align-items:center;gap:8px}
+.summary-section-title::after{content:'';flex:1;height:1px;background:var(--bdr)}
+.brand-summary-block{margin-bottom:0;border:1px solid var(--bdr);border-radius:var(--r);
+  overflow:hidden;margin-bottom:2px}
+.brand-summary-hdr{display:flex;align-items:center;justify-content:space-between;
+  padding:11px 18px;background:var(--bg-s);border-bottom:1px solid var(--bdr);
+  cursor:pointer;transition:background .12s}
+.brand-summary-hdr:hover{background:#f0f0f0}
+.brand-summary-hdr-left{display:flex;align-items:center;gap:10px}
+.brand-summary-name{font-weight:700;font-size:14px;letter-spacing:-.01em}
+.brand-jump-btn{font-family:var(--mono);font-size:10px;font-weight:600;padding:2px 8px;
+  background:var(--bg);border:1px solid var(--bdr2);border-radius:4px;
+  color:var(--tx3);cursor:pointer;transition:all .12s}
+.brand-jump-btn:hover{background:var(--tx);color:#fff;border-color:var(--tx)}
 /* account dropdown */
 .acc-dropdown{position:relative;min-width:160px}
 .acc-btn{display:flex;align-items:center;justify-content:space-between;gap:8px;
@@ -369,7 +387,7 @@ const M_HIGHLIGHT = new Set(['spend','roas','cpm']);
 
 // ── state ────────────────────────────────────────────────────
 const S = {
-  tab:     'g2g',
+  tab:     'summary',
   from:    '2026-03-22',
   to:      TODAY,
   vs_on:   false,
@@ -610,19 +628,38 @@ function renderTables(rows, vsRows, elId) {
 // ── brand nav ─────────────────────────────────────────────────
 function buildBrandNav() {
   const nav=document.getElementById('brand-nav');
-  nav.innerHTML=BRANDS.map(b=>{
-    const rows=RAW[b]||[];
-    const cnt=rows.length;
-    return `<div class="brand-tab${b===S.tab?' active':''}" onclick="setTab('${b}',this)">
+  const summaryTab=`<div class="brand-tab${'summary'===S.tab?' active':''}" onclick="setTab('summary',this)"
+    style="font-weight:700">汇总 <span class="pill" style="background:#e0e7ff;color:#4338ca">ALL</span></div>`;
+  const brandTabs=BRANDS.map(b=>`<div class="brand-tab${b===S.tab?' active':''}" onclick="setTab('${b}',this)">
       ${BRAND_LABELS[b]||b.toUpperCase()}
       <span class="pill">${b.toUpperCase()}</span>
-    </div>`;
-  }).join('');
+    </div>`).join('');
+  nav.innerHTML=summaryTab+brandTabs;
 }
 
 function buildPages() {
   const el=document.getElementById('pages');
-  el.innerHTML=BRANDS.map(b=>`
+  const summaryPage=`<div id="page-summary" class="page${'summary'===S.tab?' active':''}">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <span style="font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.08em;
+        text-transform:uppercase;padding:3px 8px;background:#e0e7ff;border:1px solid #c7d2fe;
+        border-radius:4px;color:#4338ca">All Brands</span>
+      <span style="font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.08em;
+        text-transform:uppercase;padding:3px 8px;background:#f0f0f0;border:1px solid var(--bdr2);
+        border-radius:4px;color:var(--tx3)">Meta Data</span>
+    </div>
+    <h1 class="s-title">汇总看板</h1>
+    <p class="s-sub" id="sub-summary"></p>
+    <div class="summary-section">
+      <div class="summary-section-title">全品牌汇总</div>
+      <div class="kpi-grid" id="kpi-summary"></div>
+    </div>
+    <div class="summary-section">
+      <div class="summary-section-title">分品牌 · 分国家</div>
+      <div id="tbl-summary"></div>
+    </div>
+  </div>`;
+  el.innerHTML=summaryPage+BRANDS.map(b=>`
     <div id="page-${b}" class="page${b===S.tab?' active':''}">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
         <span style="font-family:var(--mono);font-size:10px;font-weight:600;
@@ -757,7 +794,7 @@ function setTab(b, el) {
   el.classList.add('active');
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-'+b).classList.add('active');
-  buildStaticChips(); // rebuild ad_type/creative_type chips for this brand
+  if(b!=='summary') buildStaticChips();
   render();
 }
 
@@ -888,8 +925,111 @@ function dndEnd(e) {
 }
 
 // ── main render ───────────────────────────────────────────────
+// ── summary render ────────────────────────────────────────────
+function renderSummary() {
+  const from=S.from, to=S.to;
+  const vsRange=S.vs_on?vsDateRange():null;
+
+  // Aggregate all brands
+  const allRows=BRANDS.flatMap(b=>(RAW[b]||[]).filter(r=>r.date>=from&&r.date<=to&&
+    (S.adt.size===0||S.adt.has(r.ad_type))&&(S.ct.size===0||S.ct.has(r.creative_type))));
+  const allVsRows=vsRange?BRANDS.flatMap(b=>(RAW[b]||[]).filter(r=>r.date>=vsRange[0]&&r.date<=vsRange[1]&&
+    (S.adt.size===0||S.adt.has(r.ad_type))&&(S.ct.size===0||S.ct.has(r.creative_type)))):null;
+
+  renderKpi(allRows,allVsRows,'kpi-summary');
+
+  // Per-brand × country table
+  const sumCols=S.m_order.filter(k=>S.metrics.has(k));
+  const vsRange2=S.vs_on?vsDateRange():null;
+
+  const blocks=BRANDS.map(b=>{
+    const bRows=(RAW[b]||[]).filter(r=>r.date>=from&&r.date<=to&&
+      (S.adt.size===0||S.adt.has(r.ad_type))&&(S.ct.size===0||S.ct.has(r.creative_type)));
+    if(!bRows.length) return '';
+    const bVsRows=vsRange2?(RAW[b]||[]).filter(r=>r.date>=vsRange2[0]&&r.date<=vsRange2[1]&&
+      (S.adt.size===0||S.adt.has(r.ad_type))&&(S.ct.size===0||S.ct.has(r.creative_type))):null;
+
+    const byCt=agg(bRows,['country']);
+    byCt.sort((a,b)=>b.spend-a.spend);
+    const bVsByCt=bVsRows?new Map(agg(bVsRows,['country']).map(r=>[r.country,r])):null;
+    const bTot=totals(bRows);
+    const bVsTot=bVsRows?totals(bVsRows):null;
+
+    const headerCols=sumCols.map(k=>{
+      const md=METRIC_DEFS[k];
+      return `<th>${md.label}</th>${S.vs_on&&S.cmp_m.has(k)?'<th class="cmp-th">∆</th>':''}`;
+    }).join('');
+
+    function row(r, vsR, isSub=false) {
+      return sumCols.map(k=>{
+        const v=mVal(r,k);
+        const main=`<td class="n${['cpm','roas'].includes(k)?' hi':''}">${fmtMVal(v,k)}</td>`;
+        if(!S.vs_on||!S.cmp_m.has(k)) return main;
+        const vv=vsR?mVal(vsR,k):null;
+        const dh=vv!=null?deltaHtml(r,vsR,k):'';
+        return main+`<td class="ct">${vv!=null?fmtMVal(vv,k):'—'}${dh}</td>`;
+      }).join('');
+    }
+
+    const ctRows=byCt.map(r=>{
+      const vsr=bVsByCt?.get(r.country)||null;
+      const flag=FLAGS[r.country]||'';
+      return `<tr style="border-bottom:1px solid var(--bdr)">
+        <td style="padding:8px 12px;font-size:13px">${flag} ${r.country}</td>
+        ${row(r,vsr)}
+      </tr>`;
+    }).join('');
+
+    const subRow=`<tr style="border-top:2px solid var(--bdr2);font-weight:600;background:var(--bg-s)">
+      <td style="padding:9px 12px;font-size:13px">小计</td>
+      ${row(bTot,bVsTot,true)}
+    </tr>`;
+
+    const label=BRAND_LABELS[b]||b.toUpperCase();
+    return `<div class="brand-summary-block">
+      <div class="brand-summary-hdr" onclick="jumpToBrand('${b}')">
+        <div class="brand-summary-hdr-left">
+          <span class="brand-summary-name">${label}</span>
+          <span class="pill">${b.toUpperCase()}</span>
+        </div>
+        <button class="brand-jump-btn" onclick="event.stopPropagation();jumpToBrand('${b}')">
+          进入详情 →
+        </button>
+      </div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">
+        <thead><tr style="background:var(--bg);border-bottom:1px solid var(--bdr2)">
+          <th style="text-align:left;padding:10px 12px;font-size:11px;font-weight:600;color:var(--tx2);
+            text-transform:uppercase;letter-spacing:.02em;min-width:140px">国家</th>
+          ${headerCols}
+        </tr></thead>
+        <tbody>${ctRows}${subRow}</tbody>
+      </table></div>
+    </div>`;
+  }).filter(Boolean).join('');
+
+  document.getElementById('tbl-summary').innerHTML=blocks||'<div class="empty">无数据</div>';
+  const totalRows=BRANDS.reduce((s,b)=>(RAW[b]||[]).filter(r=>r.date>=from&&r.date<=to).length+s,0);
+  const cmpInfo=S.vs_on?` | 对比 ${vsRange2[0]} → ${vsRange2[1]}`:'';
+  document.getElementById('sub-summary').textContent=`${from} → ${to}${cmpInfo} · ${allRows.length} rows`;
+  document.getElementById('f-sum').textContent=`${allRows.length} / ${totalRows} rows`;
+}
+
+function jumpToBrand(b) {
+  S.tab=b;
+  document.querySelectorAll('.brand-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.brand-tab').forEach(t=>{
+    if(t.textContent.trim().startsWith(BRAND_LABELS[b]||b.toUpperCase())) t.classList.add('active');
+  });
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+b).classList.add('active');
+  buildStaticChips();
+  render();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
 function render() {
   const b=S.tab;
+  if(b==='summary'){renderSummary();pushUrl();return;}
   const rows=filterRows(S.from,S.to);
   const vsRange=S.vs_on?vsDateRange():null;
   const vsRows=vsRange?filterRows(vsRange[0],vsRange[1]):null;
