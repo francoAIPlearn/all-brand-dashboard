@@ -170,6 +170,24 @@ input[type=date]:focus{border-color:var(--tx)}
 .acc-footer button{font-size:11px;font-family:var(--sans);background:none;border:none;
   cursor:pointer;color:var(--tx3);font-weight:500}
 .acc-footer button:hover{color:var(--tx)}
+/* summary controls */
+.sum-ctrl{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  padding:10px 14px;background:var(--bg-s);border:1px solid var(--bdr);
+  border-bottom:none;border-radius:var(--r) var(--r) 0 0}
+.sum-ctrl-label{font-family:var(--mono);font-size:10px;font-weight:600;color:var(--txm);
+  text-transform:uppercase;letter-spacing:.05em;white-space:nowrap}
+.sum-sort-select{padding:4px 8px;font-size:12px;font-weight:500;
+  border:1px solid var(--bdr2);border-radius:var(--r);color:var(--tx2);
+  background:var(--bg);cursor:pointer;outline:none}
+.sum-sort-select:focus{border-color:var(--tx)}
+.sum-ctry-chips{display:flex;flex-wrap:wrap;gap:4px}
+.sum-ctry-chip{display:inline-flex;align-items:center;gap:4px;cursor:pointer;
+  padding:3px 9px;border:1px solid var(--bdr2);border-radius:var(--r);
+  font-size:11px;font-weight:500;color:var(--tx2);background:var(--bg);
+  transition:all .12s;user-select:none;white-space:nowrap}
+.sum-ctry-chip input{display:none}
+.sum-ctry-chip:has(input:checked){background:var(--tx);border-color:var(--tx);color:#fff}
+.sum-ctry-chip:hover{border-color:var(--tx)}
 /* drag-and-drop */
 .kpi-card{cursor:grab}
 .kpi-card.dragging{opacity:.4;cursor:grabbing}
@@ -397,6 +415,8 @@ const S = {
   metrics: new Set(M_KEYS),
   m_order: [...M_KEYS],
   accounts: new Set(),
+  sum_sort:  'spend',      // brand-compare sort column
+  sum_ctry:  new Set(),    // brand-compare country filter (empty=all)
   cmp_m:   new Set(),  // which metrics show comparison column
   adt:     new Set(),
   ct:      new Set(),
@@ -925,6 +945,19 @@ function dndEnd(e) {
 }
 
 // ── main render ───────────────────────────────────────────────
+// ── summary table controls ──────────────────────────────────
+function onSumSort(k) { S.sum_sort=k; render(); }
+function onSumCtryChange(cb) {
+  // if all were selected (sum_ctry empty) seed from all checkboxes first
+  const allCbs=[...document.querySelectorAll('.sum-ctry-chips input[type=checkbox]')];
+  if(S.sum_ctry.size===0) allCbs.forEach(c=>S.sum_ctry.add(c.value));
+  cb.checked ? S.sum_ctry.add(cb.value) : S.sum_ctry.delete(cb.value);
+  // if all selected again, reset to empty (= all)
+  const allCtries=[...new Set(BRANDS.flatMap(b=>(RAW[b]||[]).map(r=>r.country).filter(Boolean)))];
+  if(S.sum_ctry.size>=allCtries.length) S.sum_ctry=new Set();
+  render();
+}
+
 // ── summary render ────────────────────────────────────────────
 function renderSummary() {
   const from=S.from, to=S.to;
@@ -983,17 +1016,45 @@ function renderSummary() {
     return main+`<td class="ct" style="font-weight:700">${vv!=null?fmtMVal(vv,k):'—'}${dh}</td>`;
   }).join('');
 
-  const brandRows=BRANDS.map(b=>{
+  // gather all unique countries across brands for control chips
+  const allCtries=[...new Set(BRANDS.flatMap(b=>(RAW[b]||[]).map(r=>r.country).filter(Boolean)))].sort();
+
+  const brandEntries=BRANDS.map(b=>{
     const bRows=(RAW[b]||[]).filter(r=>r.date>=from&&r.date<=to&&
-      (S.adt.size===0||S.adt.has(r.ad_type))&&(S.ct.size===0||S.ct.has(r.creative_type)));
-    if(!bRows.length) return '';
+      (S.adt.size===0||S.adt.has(r.ad_type))&&(S.ct.size===0||S.ct.has(r.creative_type))&&
+      (S.sum_ctry.size===0||S.sum_ctry.has(r.country)));
+    if(!bRows.length) return null;
     const bVsRows=vsRange2?(RAW[b]||[]).filter(r=>r.date>=vsRange2[0]&&r.date<=vsRange2[1]&&
-      (S.adt.size===0||S.adt.has(r.ad_type))&&(S.ct.size===0||S.ct.has(r.creative_type))):null;
-    return brandRow(b, bRows, bVsRows);
-  }).join('');
+      (S.adt.size===0||S.adt.has(r.ad_type))&&(S.ct.size===0||S.ct.has(r.creative_type))&&
+      (S.sum_ctry.size===0||S.sum_ctry.has(r.country))):null;
+    return {b, bRows, bVsRows, sortVal: mVal(totals(bRows), S.sum_sort)};
+  }).filter(Boolean);
+
+  // sort descending by selected metric
+  brandEntries.sort((a,z)=>z.sortVal-a.sortVal);
+  const brandRows=brandEntries.map(({b,bRows,bVsRows})=>brandRow(b,bRows,bVsRows)).join('');
+
+  // country chips HTML
+  const ctryChips=allCtries.map(c=>`
+    <label class="sum-ctry-chip">
+      <input type="checkbox" value="${c}" ${S.sum_ctry.size===0||S.sum_ctry.has(c)?'checked':''}
+        onchange="onSumCtryChange(this)">
+      ${FLAGS[c]||''} ${c}
+    </label>`).join('');
+
+  // sort select HTML
+  const sortOpts=sumCols.map(k=>`<option value="${k}" ${k===S.sum_sort?'selected':''}>${METRIC_DEFS[k].label}</option>`).join('');
 
   document.getElementById('brand-compare-table').innerHTML=`
-    <div style="border:1px solid var(--bdr);border-radius:var(--r);overflow:hidden">
+    <div class="sum-ctrl">
+      <span class="sum-ctrl-label">排序依据</span>
+      <select class="sum-sort-select" onchange="onSumSort(this.value)">
+        ${sortOpts}
+      </select>
+      <span class="sum-ctrl-label" style="margin-left:8px">国家筛选</span>
+      <div class="sum-ctry-chips">${ctryChips}</div>
+    </div>
+    <div style="border:1px solid var(--bdr);border-top:none;border-radius:0 0 var(--r) var(--r);overflow:hidden">
       <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead><tr style="background:var(--bg-s);border-bottom:1px solid var(--bdr2)">
           <th style="text-align:left;padding:10px 14px;font-size:11px;font-weight:600;
