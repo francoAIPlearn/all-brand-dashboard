@@ -125,6 +125,37 @@ input[type=date]:focus{border-color:var(--tx)}
 .kpi-hl{background:#f8f4ff;border-color:#ddd6fe}
 .kpi-hl:hover{border-color:#c4b5fd}
 .kpi-hl .kpi-val{color:var(--pur)}
+/* account dropdown */
+.acc-dropdown{position:relative;min-width:160px}
+.acc-btn{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:5px 10px;font-size:12px;font-weight:500;background:var(--bg);
+  border:1px solid var(--bdr2);border-radius:var(--r);color:var(--tx2);
+  cursor:pointer;user-select:none;white-space:nowrap;min-width:140px}
+.acc-btn:hover{border-color:var(--tx)}
+.acc-btn.open{border-color:var(--tx)}
+.acc-arrow{font-size:9px;color:var(--txm);transition:transform .15s}
+.acc-btn.open .acc-arrow{transform:rotate(180deg)}
+.acc-panel{position:absolute;top:calc(100% + 4px);left:0;min-width:220px;max-width:300px;
+  background:var(--bg);border:1px solid var(--bdr2);border-radius:var(--r);
+  box-shadow:0 8px 24px rgba(0,0,0,.1);z-index:500;display:none}
+.acc-panel.open{display:block}
+.acc-search{padding:8px;border-bottom:1px solid var(--bdr)}
+.acc-search input{width:100%;padding:5px 8px;font-size:12px;border:1px solid var(--bdr2);
+  border-radius:4px;outline:none;color:var(--tx2)}
+.acc-search input:focus{border-color:var(--tx)}
+.acc-list{max-height:220px;overflow-y:auto;padding:4px}
+.acc-item{display:flex;align-items:center;gap:8px;padding:6px 8px;
+  border-radius:4px;cursor:pointer;font-size:12px;color:var(--tx2)}
+.acc-item:hover{background:var(--bg-hov)}
+.acc-item input{width:12px;height:12px;accent-color:var(--tx);cursor:pointer}
+.acc-footer{padding:6px 8px;border-top:1px solid var(--bdr);display:flex;gap:8px}
+.acc-footer button{font-size:11px;font-family:var(--sans);background:none;border:none;
+  cursor:pointer;color:var(--tx3);font-weight:500}
+.acc-footer button:hover{color:var(--tx)}
+/* drag-and-drop */
+.kpi-card{cursor:grab}
+.kpi-card.dragging{opacity:.4;cursor:grabbing}
+.kpi-card.drag-over{border-style:dashed;border-color:var(--pur)}
 .kpi-lbl{font-size:11px;color:var(--tx3);font-weight:500;text-transform:uppercase;
   letter-spacing:.04em;margin-bottom:7px;display:inline-flex;align-items:center;gap:4px}
 .kpi-val{font-family:var(--mono);font-size:21px;font-weight:600;line-height:1.1}
@@ -286,6 +317,24 @@ td.ct .d{font-size:10px;font-weight:600;padding:1px 4px;border-radius:2px;margin
     <div class="chips m-chips" id="chips-m"></div>
   </div>
 
+  <div class="fg">
+    <div class="fl">账户</div>
+    <div class="acc-dropdown" id="acc-dropdown">
+      <div class="acc-btn" id="acc-btn" onclick="toggleAccPanel()">
+        <span id="acc-btn-label">全部账户</span>
+        <span class="acc-arrow">▼</span>
+      </div>
+      <div class="acc-panel" id="acc-panel">
+        <div class="acc-search"><input id="acc-search" placeholder="搜索账户…" oninput="filterAccList()"></div>
+        <div class="acc-list" id="acc-list"></div>
+        <div class="acc-footer">
+          <button onclick="accSelectAll(true)">全选</button>
+          <button onclick="accSelectAll(false)">清空</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="filter-right">
     <button class="icon-btn" onclick="toggleAllRows(true)">展开全部</button>
     <button class="icon-btn" onclick="toggleAllRows(false)">收起全部</button>
@@ -328,6 +377,8 @@ const S = {
   vs_to:   '',
   vs_mode: 'prev',   // 'prev'|'custom'
   metrics: new Set(M_KEYS),
+  m_order: [...M_KEYS],
+  accounts: new Set(),
   cmp_m:   new Set(),  // which metrics show comparison column
   adt:     new Set(),
   ct:      new Set(),
@@ -353,10 +404,12 @@ function mVal(r, key) {
   if(key==='cpa')return p?s/p:0; if(key==='i_p')return p?i/p:0;
   return 0;
 }
+const fmtUsdInt=v=>v?'$'+Math.round(v).toLocaleString():'—';
 function fmtMVal(v, key) {
   if(!v) return '—';
-  if(['spend','cpa'].includes(key)) return fmtUsd(v);
-  if(['gmv'].includes(key)) return fmtUsd(v);
+  if(['spend'].includes(key)) return fmtUsdInt(v);
+  if(['gmv'].includes(key)) return fmtUsdInt(v);
+  if(['cpa'].includes(key)) return fmtUsd(v);
   if(['cpm'].includes(key)) return fmtCpm(v);
   if(['ctr','cvr'].includes(key)) return fmtPct(v);
   if(['roas'].includes(key)) return fmtX(v);
@@ -368,7 +421,8 @@ function filterRows(from, to) {
   return (RAW[S.tab]||[]).filter(r=>
     r.date>=from && r.date<=to &&
     (S.adt.size===0||S.adt.has(r.ad_type)) &&
-    (S.ct.size===0||S.ct.has(r.creative_type))
+    (S.ct.size===0||S.ct.has(r.creative_type)) &&
+    (S.accounts.size===0||S.accounts.has(r.account_name))
   );
 }
 
@@ -413,7 +467,7 @@ function deltaHtml(cur, vs, key) {
 // ── KPI render ────────────────────────────────────────────────
 function renderKpi(rows, vsRows, elId) {
   const t=totals(rows), vt=vsRows?totals(vsRows):null;
-  const html=M_KEYS.filter(k=>S.metrics.has(k)).map(k=>{
+  const html=S.m_order.filter(k=>S.metrics.has(k)).map(k=>{
     const md=METRIC_DEFS[k];
     const v=mVal(t,k), vv=vt?mVal(vt,k):null;
     let cmpHtml='';
@@ -433,7 +487,12 @@ function renderKpi(rows, vsRows, elId) {
           <input type="checkbox" ${S.cmp_m.has(k)?'checked':''} onchange="toggleCmpMetric('${k}',this.checked)">
          </label>`
       : '';
-    return `<div class="kpi-card${M_HIGHLIGHT.has(k)?' kpi-hl':''}">
+    return `<div class="kpi-card${M_HIGHLIGHT.has(k)?' kpi-hl':''}" draggable="true"
+      data-key="${k}"
+      ondragstart="dndStart(event)"
+      ondragover="dndOver(event)"
+      ondrop="dndDrop(event)"
+      ondragend="dndEnd(event)">
       <p class="kpi-lbl">${md.label} <span class="hd" data-m="${k}">?</span>${cmpChk}</p>
       <p class="kpi-val">${fmtMVal(v,k)}</p>
       ${cmpHtml}
@@ -458,7 +517,7 @@ function renderTables(rows, vsRows, elId) {
   if(!countries.length){document.getElementById(elId).innerHTML='<div class="empty">无符合条件的数据</div>';return;}
 
   // visible cols
-  const vcols=M_KEYS.filter(k=>S.metrics.has(k));
+  const vcols=S.m_order.filter(k=>S.metrics.has(k));
 
   // metric header cell
   function mth(k){
@@ -565,7 +624,18 @@ function buildPages() {
   const el=document.getElementById('pages');
   el.innerHTML=BRANDS.map(b=>`
     <div id="page-${b}" class="page${b===S.tab?' active':''}">
-      <p class="s-label">Brand · ${b.toUpperCase()}</p>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="font-family:var(--mono);font-size:10px;font-weight:600;
+          letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;
+          background:#f0f0f0;border:1px solid var(--bdr2);border-radius:4px;color:var(--tx3)">
+          Meta Data
+        </span>
+        <span style="font-family:var(--mono);font-size:10px;font-weight:600;
+          letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;
+          background:var(--acc-s);border:1px solid #fecaca;border-radius:4px;color:var(--acc)">
+          Brand · ${b.toUpperCase()}
+        </span>
+      </div>
       <h1 class="s-title">${BRAND_LABELS[b]||b.toUpperCase()}</h1>
       <p class="s-sub" id="sub-${b}"></p>
       <div class="src-badge"><div class="src-dot"></div>stg_${b}_dailydata_clean · 90d</div>
@@ -577,6 +647,7 @@ function buildPages() {
 
 // ── chips ─────────────────────────────────────────────────────
 function buildStaticChips() {
+  buildAccDropdown();
   // ad_type and creative_type — gather from current brand
   const rows=RAW[S.tab]||[];
   const adts=[...new Set(rows.map(r=>r.ad_type).filter(Boolean))].sort();
@@ -728,6 +799,91 @@ function copyUrl() {
     const el=document.getElementById('url-copy-btn');
     const orig=el.textContent; el.textContent='✓ 已复制';
     setTimeout(()=>el.textContent=orig,1800);
+  });
+}
+
+// ── account dropdown ─────────────────────────────────────────
+function buildAccDropdown() {
+  const all=[...new Set((RAW[S.tab]||[]).map(r=>r.account_name).filter(Boolean))].sort();
+  S.accounts=new Set(); // reset filter when brand changes
+  const list=document.getElementById('acc-list');
+  list.innerHTML=all.map(a=>`
+    <label class="acc-item">
+      <input type="checkbox" value="${a}" checked onchange="onAccChange(this)">
+      <span>${a}</span>
+    </label>`).join('');
+  updateAccBtn(all.length, all.length);
+}
+function filterAccList() {
+  const q=document.getElementById('acc-search').value.toLowerCase();
+  document.querySelectorAll('#acc-list .acc-item').forEach(el=>{
+    el.style.display=el.querySelector('span').textContent.toLowerCase().includes(q)?'':'none';
+  });
+}
+function toggleAccPanel() {
+  const btn=document.getElementById('acc-btn');
+  const panel=document.getElementById('acc-panel');
+  btn.classList.toggle('open');
+  panel.classList.toggle('open');
+}
+function onAccChange(cb) {
+  cb.checked ? S.accounts.delete(cb.value) : S.accounts.add(cb.value);
+  // S.accounts = set of EXCLUDED accounts... better: track included
+  // Redo: S.accounts = set of selected; empty = all
+  rebuildAccSet();
+  render();
+}
+function rebuildAccSet() {
+  const checks=document.querySelectorAll('#acc-list input[type=checkbox]');
+  const all=[...checks].map(c=>c.value);
+  const checked=[...checks].filter(c=>c.checked).map(c=>c.value);
+  if(checked.length===all.length) S.accounts=new Set();
+  else S.accounts=new Set(checked);
+  updateAccBtn(checked.length, all.length);
+}
+function updateAccBtn(sel, tot) {
+  document.getElementById('acc-btn-label').textContent=
+    sel===tot?'全部账户':`已选 ${sel} / ${tot}`;
+}
+function accSelectAll(on) {
+  document.querySelectorAll('#acc-list input[type=checkbox]').forEach(c=>{c.checked=on;});
+  rebuildAccSet(); render();
+}
+// close dropdown on outside click
+document.addEventListener('click',e=>{
+  if(!e.target.closest('#acc-dropdown')){
+    document.getElementById('acc-btn')?.classList.remove('open');
+    document.getElementById('acc-panel')?.classList.remove('open');
+  }
+});
+
+// ── drag and drop for metric order ────────────────────────────
+let dndSrc=null;
+function dndStart(e) {
+  dndSrc=e.currentTarget.dataset.key;
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed='move';
+}
+function dndOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect='move';
+  document.querySelectorAll('.kpi-card').forEach(c=>c.classList.remove('drag-over'));
+  e.currentTarget.classList.add('drag-over');
+}
+function dndDrop(e) {
+  e.preventDefault();
+  const tgt=e.currentTarget.dataset.key;
+  if(!dndSrc||dndSrc===tgt) return;
+  const oi=S.m_order.indexOf(dndSrc), ni=S.m_order.indexOf(tgt);
+  if(oi<0||ni<0) return;
+  S.m_order.splice(oi,1);
+  S.m_order.splice(ni,0,dndSrc);
+  dndSrc=null;
+  render();
+}
+function dndEnd(e) {
+  document.querySelectorAll('.kpi-card').forEach(c=>{
+    c.classList.remove('dragging','drag-over');
   });
 }
 
